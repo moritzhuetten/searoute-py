@@ -99,8 +99,41 @@ class Marnet(nx.Graph):
 
         if apply_restrictions:
             restrictions_ = restrictions or self.restrictions
-            filtered_edges = [(u, v) for u, v, data in self.edges(
-                data=True) if data.get('passage', None) not in restrictions_]
+            filtered_edges = []
+
+            # separate the restrictions:
+            # string elements are passages to avoid
+            # dictionary elements are elevation or coast distance restrictions
+            restrictions_passages = [r for r in restrictions_ if isinstance(r, (str, Passage))]
+            restrictions_dicts = [r for r in restrictions_ if isinstance(r, dict)] or [{}]
+            for r in restrictions_dicts:
+                elevation_max = r.get('elevation_max', None)
+                elevation_min = r.get('elevation_min', None)
+                coastdist_max = r.get('coastdist_max', None)
+                coastdist_min = r.get('coastdist_min', None)
+
+            for u, v, data in self.edges(data=True):
+                if not restrictions_:
+                    filtered_edges.append((u, v))
+                    continue
+
+                if restrictions_passages and data.get('passage', None) in restrictions_passages:
+                    continue
+
+                if elevation_max is not None and data.get('elevation_max', float('inf')) > elevation_max:
+                    continue
+
+                if elevation_min is not None and data.get('elevation_min', float('-inf')) < elevation_min:
+                    continue
+
+                if coastdist_max is not None and data.get('coastdist_min', float('inf')) > coastdist_max:
+                    continue
+
+                if coastdist_min is not None and data.get('coastdist_min', float('-inf')) < coastdist_min:
+                    continue
+
+                filtered_edges.append((u, v))
+
             return self.subgraph(filtered_edges)
         else:
             return self
