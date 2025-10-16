@@ -129,7 +129,7 @@ class Marnet(nx.Graph):
                 if elevation_min is not None and data.get('elevation_min', float('-inf')) < elevation_min:
                     continue
 
-                if coastdist_max is not None and data.get('coastdist_min', float('inf')) > coastdist_max:
+                if coastdist_max is not None and data.get('coastdist_max', float('inf')) > coastdist_max:
                     continue
 
                 if coastdist_min is not None and data.get('coastdist_min', float('-inf')) < coastdist_min:
