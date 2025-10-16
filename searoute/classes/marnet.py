@@ -1,6 +1,6 @@
 import networkx as nx
 from .passages import Passage
-from ..utils import load_from_geojson, distance
+from ..utils import load_from_geojson, distance, should_avoid_edge, separate_restrictions
 from .kdtree import KDTree
 
 
@@ -20,7 +20,11 @@ class Marnet(nx.Graph):
         super().__init__()
         DEFAULT_CRF = 'EPSG:3857'
         self.graph['crs'] = DEFAULT_CRF  # CRS attribute for the graph
-        self.restrictions = [Passage.northwest]
+        self.restrictions_passages = [Passage.northwest]
+        self.elevation_max = None
+        self.elevation_min = None
+        self.coastdist_max = None
+        self.coastdist_min = None
         self.kdtree = KDTree()
 
     def add_node(self, node, **attr):
@@ -98,41 +102,42 @@ class Marnet(nx.Graph):
         """
 
         if apply_restrictions:
-            restrictions_ = restrictions or self.restrictions
+            if restrictions is not None:
+                # Separate the restrictions using utility function
+                (
+                    restrictions_passages,
+                    elevation_max,
+                    elevation_min,
+                    coastdist_max,
+                    coastdist_min,
+                ) = separate_restrictions(restrictions)
+            else:
+                (
+                    restrictions_passages,
+                    elevation_max,
+                    elevation_min,
+                    coastdist_max,
+                    coastdist_min,
+                ) = (
+                    self.restrictions_passages,
+                    self.elevation_max,
+                    self.elevation_min,
+                    self.coastdist_max,
+                    self.coastdist_min,
+                )
             filtered_edges = []
 
-            # separate the restrictions:
-            # string elements are passages to avoid
-            # dictionary elements are elevation or coast distance restrictions
-            restrictions_passages = [r for r in restrictions_ if isinstance(r, (str, Passage))]
-            restrictions_tuples = [r for r in restrictions_ if isinstance(r, tuple)] or [()]
-            elevation_max, elevation_min = None, None
-            coastdist_max, coastdist_min = None, None
-            for r in restrictions_tuples:
-                len_r = len(r)
-                elevation_max = r[0] if len_r > 0 else None
-                elevation_min = r[1] if len_r > 1 else None
-                coastdist_max = r[2] if len_r > 2 else None
-                coastdist_min = r[3] if len_r > 3 else None
-
             for u, v, data in self.edges(data=True):
-                if not restrictions_:
-                    filtered_edges.append((u, v))
-                    continue
 
-                if restrictions_passages and data.get('passage', None) in restrictions_passages:
-                    continue
-
-                if elevation_max is not None and data.get('elevation_max', float('inf')) > elevation_max:
-                    continue
-
-                if elevation_min is not None and data.get('elevation_min', float('-inf')) < elevation_min:
-                    continue
-
-                if coastdist_max is not None and data.get('coastdist_max', float('inf')) > coastdist_max:
-                    continue
-
-                if coastdist_min is not None and data.get('coastdist_min', float('-inf')) < coastdist_min:
+                # Use utility function to check if edge should be avoided
+                if should_avoid_edge(
+                    data,
+                    restrictions_passages,
+                    elevation_max,
+                    elevation_min,
+                    coastdist_max,
+                    coastdist_min,
+                ):
                     continue
 
                 filtered_edges.append((u, v))
@@ -145,16 +150,34 @@ class Marnet(nx.Graph):
         # Function to customize edge weight based on edge attributes or conditions
         # For this example, we will avoid edges with a certain attribute (e.g., "avoid": True)
         edge_values = edge_data.values()
-        avoid_edge = any(value.get('passage', None) in (
-            self.restrictions) for value in edge_values)
+        avoid_edge = any(
+            should_avoid_edge(
+                value,
+                self.restrictions_passages,
+                self.elevation_max,
+                self.elevation_min,
+                self.coastdist_max,
+                self.coastdist_min,
+            )
+            for value in edge_values
+        )
         wights = [value.get('weight', 1.0) for value in edge_values]
-        return float('inf') if avoid_edge else min(wights)
+        return float("inf") if avoid_edge else min(wights)
 
     def filter_avoid_passages(self, u, v, edge_data, args):
         edge_values = edge_data.values()
 
-        avoid_edge = any(value.get('passage', None) in (
-            self.restrictions or []) for value in edge_values)
+        avoid_edge = any(
+            should_avoid_edge(
+                value,
+                self.restrictions_passages,
+                self.elevation_max,
+                self.elevation_min,
+                self.coastdist_max,
+                self.coastdist_min,
+            )
+            for value in edge_values
+        )
 
         return not (avoid_edge)
 
@@ -170,7 +193,18 @@ class Marnet(nx.Graph):
 
     # Get the shortest route by distance
     def __custom_w(self, u, v, data):
-        return data.get('weight') if data.get('passage') not in self.restrictions else float('inf')
+        return (
+            data.get("weight")
+            if not should_avoid_edge(
+                data,
+                self.restrictions_passages,
+                self.elevation_max,
+                self.elevation_min,
+                self.coastdist_max,
+                self.coastdist_min,
+            )
+            else float("inf")
+        )
 
     def shortest_path(self, origin, destination):
         """

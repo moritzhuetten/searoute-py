@@ -1,6 +1,6 @@
 
 from .classes import ports, marnet, passages
-from .utils import get_duration, distance_length, from_nodes_edges_set, process_route, validate_lon_lat
+from .utils import get_duration, distance_length, from_nodes_edges_set, process_route, validate_lon_lat, separate_restrictions
 from geojson import Feature, LineString
 
 from functools import lru_cache
@@ -71,7 +71,13 @@ def searoute(origin, destination, units='km', speed_knot=24, append_orig_dest=Fa
 
     # updating restrictions
     if restrictions is not None:
-        M.restrictions = restrictions
+        (
+            M.restrictions_passages,
+            M.elevation_max,
+            M.elevation_min,
+            M.coastdist_max,
+            M.coastdist_min,
+        ) = separate_restrictions(restrictions)
 
     # H = nx.subgraph_view(G, filter_edge=filter_edge)
 

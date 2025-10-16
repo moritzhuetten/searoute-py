@@ -1,6 +1,7 @@
 from math import atan2, cos,  pow, radians, sin, sqrt, tan
 import geojson
 import inspect
+from searoute.classes.passages import Passage
 
 
 def get_unique_number(lon, lat):
@@ -503,7 +504,107 @@ def pnpoly(nvert: int, vertx: list, verty: list, testx :float, testy: float) ->b
     c = False
     for i in range(nvert):
         j = nvert - 1 if i == 0 else i - 1
-        if ((verty[i] > testy) != (verty[j] > testy)) and \
-                (testx < (vertx[j] - vertx[i]) * (testy - verty[i]) / (verty[j] - verty[i]) + vertx[i]):
+        if ((verty[i] > testy) != (verty[j] > testy)) and (
+            testx
+            < (vertx[j] - vertx[i]) * (testy - verty[i]) / (verty[j] - verty[i])
+            + vertx[i]
+        ):
             c = not c
     return c
+
+
+def should_avoid_edge(
+    edge_data,
+    restrictions_passages,
+    elevation_max=None,
+    elevation_min=None,
+    coastdist_max=None,
+    coastdist_min=None,
+):
+    """
+    Determine if an edge should be avoided based on restrictions.
+
+    Parameters
+    ----------
+    edge_data : dict
+        Edge data containing attributes like passage, elevation_max, etc.
+    restrictions_passages : list
+        List of passages to avoid
+    elevation_max : float, optional
+        Maximum allowed elevation
+    elevation_min : float, optional
+        Minimum allowed elevation
+    coastdist_max : float, optional
+        Maximum allowed coast distance
+    coastdist_min : float, optional
+        Minimum allowed coast distance
+
+    Returns
+    -------
+    bool
+        True if edge should be avoided, False otherwise
+    """
+    # Check passage restrictions
+    if (
+        restrictions_passages
+        and edge_data.get("passage", None) in restrictions_passages
+    ):
+        return True
+
+    # Check elevation restrictions
+    if (
+        elevation_max is not None
+        and edge_data.get("elevation_max", float("inf")) > elevation_max
+    ):
+        return True
+
+    if (
+        elevation_min is not None
+        and edge_data.get("elevation_min", float("-inf")) < elevation_min
+    ):
+        return True
+
+    # Check coast distance restrictions
+    if (
+        coastdist_max is not None
+        and edge_data.get("coastdist_max", float("inf")) > coastdist_max
+    ):
+        return True
+
+    if (
+        coastdist_min is not None
+        and edge_data.get("coastdist_min", float("-inf")) < coastdist_min
+    ):
+        return True
+
+    return False
+
+
+def separate_restrictions(restrictions):
+    """
+    Separate restrictions into passages and elevation/coast distance parameters.
+
+    Parameters
+    ----------
+    restrictions : list
+        List containing passage restrictions (str/Passage) and tuple restrictions
+
+    Returns
+    -------
+    tuple
+        (restrictions_passages, elevation_max, elevation_min, coastdist_max, coastdist_min)
+    """
+    restrictions_passages = [r for r in restrictions if isinstance(r, (str, Passage))]
+    restrictions_tuples = [r for r in restrictions if isinstance(r, tuple)] or [()]
+
+    elevation_max, elevation_min = None, None
+    coastdist_max, coastdist_min = None, None
+
+    for r in restrictions_tuples:
+        len_r = len(r)
+        elevation_max = r[0] if len_r > 0 else None
+        elevation_min = r[1] if len_r > 1 else None
+        coastdist_max = r[2] if len_r > 2 else None
+        coastdist_min = r[3] if len_r > 3 else None
+
+    return restrictions_passages, elevation_max, elevation_min, coastdist_max, coastdist_min
