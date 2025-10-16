@@ -105,12 +105,15 @@ class Marnet(nx.Graph):
             # string elements are passages to avoid
             # dictionary elements are elevation or coast distance restrictions
             restrictions_passages = [r for r in restrictions_ if isinstance(r, (str, Passage))]
-            restrictions_dicts = [r for r in restrictions_ if isinstance(r, dict)] or [{}]
-            for r in restrictions_dicts:
-                elevation_max = r.get('elevation_max', None)
-                elevation_min = r.get('elevation_min', None)
-                coastdist_max = r.get('coastdist_max', None)
-                coastdist_min = r.get('coastdist_min', None)
+            restrictions_tuples = [r for r in restrictions_ if isinstance(r, tuple)] or [()]
+            elevation_max, elevation_min = None, None
+            coastdist_max, coastdist_min = None, None
+            for r in restrictions_tuples:
+                len_r = len(r)
+                elevation_max = r[0] if len_r > 0 else None
+                elevation_min = r[1] if len_r > 1 else None
+                coastdist_max = r[2] if len_r > 2 else None
+                coastdist_min = r[3] if len_r > 3 else None
 
             for u, v, data in self.edges(data=True):
                 if not restrictions_:
