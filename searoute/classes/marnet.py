@@ -162,7 +162,7 @@ class Marnet(nx.Graph):
             for value in edge_values
         )
         wights = [value.get('weight', 1.0) for value in edge_values]
-        return float("inf") if avoid_edge else min(wights)
+        return 1e10*min(wights) if avoid_edge else min(wights)
 
     def filter_avoid_passages(self, u, v, edge_data, args):
         edge_values = edge_data.values()
@@ -203,7 +203,7 @@ class Marnet(nx.Graph):
                 self.coastdist_max,
                 self.coastdist_min,
             )
-            else float("inf")
+            else 1e10*data.get("weight")
         )
 
     def shortest_path(self, origin, destination):
