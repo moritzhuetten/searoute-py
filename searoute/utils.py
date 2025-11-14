@@ -582,7 +582,16 @@ def should_avoid_edge(
 
 def separate_restrictions(restrictions):
     """
-    Separate restrictions into passages and elevation/coast distance parameters.
+    Separate restrictions into passages and named elevation/coast distance parameters.
+
+    Accepts:
+      - passage restrictions as `str` or `Passage`
+      - (hashable) tuple restrictions in the order (elevation_max, elevation_min, coastdist_max,
+        coastdist_min)
+      - dict restrictions with any of the keys:
+         'elevation_max', 'elevation_min', 'coastdist_max', 'coastdist_min'
+
+    Later restrictions override earlier ones.
 
     Parameters
     ----------
@@ -594,17 +603,30 @@ def separate_restrictions(restrictions):
     tuple
         (restrictions_passages, elevation_max, elevation_min, coastdist_max, coastdist_min)
     """
+    restrictions = restrictions or []
+
     restrictions_passages = [r for r in restrictions if isinstance(r, (str, Passage))]
-    restrictions_tuples = [r for r in restrictions if isinstance(r, tuple)] or [()]
 
-    elevation_max, elevation_min = None, None
-    coastdist_max, coastdist_min = None, None
+    keys = ("elevation_max", "elevation_min", "coastdist_max", "coastdist_min")
 
-    for r in restrictions_tuples:
-        len_r = len(r)
-        elevation_max = r[0] if len_r > 0 else None
-        elevation_min = r[1] if len_r > 1 else None
-        coastdist_max = r[2] if len_r > 2 else None
-        coastdist_min = r[3] if len_r > 3 else None
+    # convert tuples and dicts into uniform dicts
+    restrictions_dicts = []
+    for r in restrictions:
+        if isinstance(r, dict):
+            # keep only known keys
+            restrictions_dicts.append({k: r.get(k) for k in keys if k in r})
+        elif isinstance(r, tuple):
+            # map tuple positions to the named keys
+            restrictions_dicts.append({k: v for k, v in zip(keys, r)})
+
+    # merge dicts in order, later entries override earlier ones
+    merged = {}
+    for d in restrictions_dicts:
+        merged.update(d)
+
+    elevation_max = merged.get("elevation_max")
+    elevation_min = merged.get("elevation_min")
+    coastdist_max = merged.get("coastdist_max")
+    coastdist_min = merged.get("coastdist_min")
 
     return restrictions_passages, elevation_max, elevation_min, coastdist_max, coastdist_min
